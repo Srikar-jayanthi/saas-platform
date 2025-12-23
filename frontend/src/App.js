@@ -2,6 +2,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } f
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import Projects from './pages/Projects';
+import Users from './pages/Users';
 
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('token');
@@ -52,6 +54,8 @@ function App() {
             <Layout><Dashboard /></Layout>
           </ProtectedRoute>
         } />
+        <Route path="/projects" element={<ProtectedRoute><Layout><Projects /></Layout></ProtectedRoute>} />
+<Route path="/users" element={<ProtectedRoute><Layout><Users /></Layout></ProtectedRoute>} />
         <Route path="/" element={<Navigate to="/dashboard" />} />
       </Routes>
     </Router>
