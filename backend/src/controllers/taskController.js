@@ -2,7 +2,6 @@ const db = require('../config/db');
 
 /**
  * 1. Create a New Task (API 16)
- * SECURITY: Verifies Project belongs to the requester's tenant.
  */
 exports.createTask = async (req, res) => {
     const { projectId } = req.params;
@@ -14,7 +13,6 @@ exports.createTask = async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // Isolation Check: Super Admins can manage any project; others are restricted to their tenant
         let projectCheckQuery = 'SELECT id FROM projects WHERE id = $1';
         let projectCheckParams = [projectId];
 
@@ -30,7 +28,6 @@ exports.createTask = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Access denied to this project' });
         }
 
-        // Create Task with mandatory 'created_by' column
         const result = await client.query(
             `INSERT INTO tasks (project_id, tenant_id, title, description, assigned_to, priority, due_date, status, created_by)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
@@ -39,7 +36,6 @@ exports.createTask = async (req, res) => {
 
         const newTask = result.rows[0];
 
-        // Mandatory Audit Logging for compliance
         await client.query(
             `INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, details) 
              VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -58,7 +54,6 @@ exports.createTask = async (req, res) => {
 
 /**
  * 2. List Project Tasks (API 17)
- * UPDATED: Bypasses tenant isolation for Super Admin to ensure global visibility.
  */
 exports.getProjectTasks = async (req, res) => {
     const { projectId } = req.params;
@@ -69,7 +64,6 @@ exports.getProjectTasks = async (req, res) => {
         let params;
 
         if (role === 'super_admin') {
-            // Super Admin: Bypasses tenant filters
             query = `
                 SELECT t.*, u.full_name as assignee_name
                 FROM tasks t
@@ -78,7 +72,6 @@ exports.getProjectTasks = async (req, res) => {
                 ORDER BY t.created_at DESC`;
             params = [projectId];
         } else {
-            // Regular User: Strictly isolated to organization
             query = `
                 SELECT t.*, u.full_name as assignee_name
                 FROM tasks t
@@ -96,7 +89,7 @@ exports.getProjectTasks = async (req, res) => {
 };
 
 /**
- * 3. Quick Kanban status update
+ * 3. Quick Kanban status update (Used for drag-and-drop or simple status toggles)
  */
 exports.updateTaskStatus = async (req, res) => {
     const { taskId } = req.params;
@@ -126,11 +119,12 @@ exports.updateTaskStatus = async (req, res) => {
 
 /**
  * 4. Full Task Update (API 18)
+ * UPDATED: Explicitly handles title and description updates for Tenant Admins.
  */
 exports.updateTask = async (req, res) => {
     const { taskId } = req.params;
     const { status, title, description, assigned_to, priority, due_date } = req.body;
-    const { tenantId, role } = req.user;
+    const { tenantId, role, userId } = req.user;
 
     try {
         let query = `UPDATE tasks 
@@ -144,6 +138,7 @@ exports.updateTask = async (req, res) => {
                      WHERE id = $7`;
         let params = [status, title, description, assigned_to, priority, due_date, taskId];
 
+        // Ensure user can only update tasks within their own tenant
         if (role !== 'super_admin') {
             query += ' AND tenant_id = $8';
             params.push(tenantId);
@@ -151,8 +146,18 @@ exports.updateTask = async (req, res) => {
 
         const result = await db.query(query + ' RETURNING *', params);
 
-        if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Task not found' });
-        res.json({ success: true, data: result.rows[0] });
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Task not found or unauthorized' });
+        }
+
+        // Audit the update action
+        await db.query(
+            `INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id) 
+             VALUES ($1, $2, $3, $4, $5)`,
+            [tenantId, userId, 'UPDATE_TASK', 'tasks', taskId]
+        );
+
+        res.json({ success: true, message: 'Task updated successfully', data: result.rows[0] });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -160,10 +165,11 @@ exports.updateTask = async (req, res) => {
 
 /**
  * 5. Delete Task
+ * Logic: Super Admin global delete; Tenant Admin restricted to organization.
  */
 exports.deleteTask = async (req, res) => {
     const { taskId } = req.params;
-    const { tenantId, role } = req.user;
+    const { tenantId, role, userId } = req.user;
 
     try {
         let query = 'DELETE FROM tasks WHERE id = $1';
@@ -176,7 +182,17 @@ exports.deleteTask = async (req, res) => {
 
         const result = await db.query(query + ' RETURNING id', params);
 
-        if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Task not found' });
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Task not found or unauthorized' });
+        }
+
+        // Audit the deletion
+        await db.query(
+            `INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id) 
+             VALUES ($1, $2, $3, $4, $5)`,
+            [tenantId, userId, 'DELETE_TASK', 'tasks', taskId]
+        );
+
         res.json({ success: true, message: 'Task deleted successfully' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
