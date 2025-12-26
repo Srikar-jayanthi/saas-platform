@@ -34,9 +34,9 @@ This application is fully containerized. Follow these steps for a one-command de
 
 **Access the App:**
 
-- Frontend: <http://localhost:3000>
-- Backend API: <http://localhost:5000>
-- Health Check: <http://localhost:5000/api/health>
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:5000
+- Health Check: http://localhost:5000/api/health
 
 *The database will be automatically initialized with migrations and seed data upon startup.*
 
