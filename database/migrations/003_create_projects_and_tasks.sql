@@ -24,6 +24,7 @@ CREATE TABLE tasks (
     status task_status DEFAULT 'todo',
     priority task_priority DEFAULT 'medium',
     assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     due_date DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
