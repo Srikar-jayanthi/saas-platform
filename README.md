@@ -28,7 +28,7 @@ The system follows a "Shared Database, Shared Schema" approach, utilizing a mand
 This application is fully containerized. Follow these steps for a one-command deployment:
 
 1. **Prerequisites**: Ensure Docker and Docker Compose are installed on your machine.
-2. **Clone the Repo**: `git clone <repository-url>`
+2. **Clone the Repo**: `git clone https://github.com/Srikar-jayanthi/saas-platform.git`
 3. **Start Services**: Run the following command in the root directory:
 `docker-compose up -d`
 
